@@ -1,0 +1,107 @@
+clear
+clc
+close all 
+ 
+c=15;                     %%%%%重复覆盖的区域的内存个数
+error=0.0001;        %%%误差精确度
+alpha=0.3;          %%%%调整步长
+x=-2:0.05:2;
+u=length(x);
+maxcount=300;
+q=100;     %%%%量化级
+N=150;     %%%%选取的AP的存储单元
+w=rands(1,150);%%%%初始化权值
+
+%% 求出训练数据的实际值
+for i=1:u
+    t_p(i)=(exp(-1.9*(x(i)+0.5)))*cos(10*x(i));
+end
+%%%概念映射U→AC
+for p=1:u
+    s(p)=round((x(p)+2)*q/4);
+end
+%%%实际映射AC→AP
+for i=1:c
+    for p=1:u
+        A(p,i)=rem((s(p)+i),N)+1;
+    end
+end
+
+for m=1:maxcount
+    for i=1:u
+        for b=1:20
+            ok=0;
+            for j=1:c
+                ok=w(A(i,j))+ok;
+            end
+            y(i)=ok;
+            e(i)=t_p(i)-y(i);
+            if(abs(e(i))<error)
+                break
+            end
+            for k=1:c
+                w(A(i,k))=w(A(i,k))+alpha/c*e(i);   
+            end
+      end
+    end
+    J(m)=sum(abs(e),2);
+end
+
+%% 显示
+figure(1)
+plot(x,t_p,'r-');
+hold on;
+plot(x,y,'g-');
+hold on;
+
+figure(2)
+plot(x,e);
+hold on;
+
+figure(3)
+hold on;
+xlabel('训练次数tra','FontSize',15);ylabel('样本的误差','FontSize',15);
+title('误差训练曲线');
+plot(J);  %%%整体的训练误差曲线
+
+save .\data\data_w.txt w -ascii;
+
+
+这是测试的程序
+clc
+clear
+close all
+c=15;                     %%%%%重复覆盖的区域的内存个数
+x=-1:0.001:-0.6;
+u=length(x);
+q=100;     %%%%量化级
+N=50;     %%%%选取的AP的存储单元
+w=load('.\data\data_w.txt');
+
+for i=1:u
+    t_p(i)=(exp(-1.9*(x(i)+0.5)))*cos(10*x(i));
+end
+%%%概念映射U→AC
+for p=1:u
+    s(p)=round((x(p)+2)*q/4);
+end
+%%%实际映射AC→AP
+for i=1:c
+    for p=1:u
+        A(p,i)=rem((s(p)+i),N)+1;
+    end
+end
+for i=1:u
+        for b=1:20
+            ok=0;
+            for j=1:c
+                ok=w(A(i,j))+ok;
+            end
+            y(i)=ok;
+      end
+    end
+
+figure(1)
+plot(x,t_p,'r-');
+hold on;
+plot(x,y,'g-');
