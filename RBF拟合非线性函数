@@ -1,0 +1,199 @@
+%% Matlab神经网络RBF训练程序（小批量梯度下降法（Mini-batch Gradient Descent，简称MBGD））
+% 功能：
+%     RBF网络的回归--非线性函数（3D）回归的实现
+% 输入：
+%     t个三维数据，分别用x,y,z三个一维向量代表三个维度
+%     学习率a,子程序的训练的次数N，t个数据的要求精度e_permit，训练次数N_big
+% 输出：
+%     隐藏层到输出层的权重w(包含偏置b)
+%     k个高斯分布的方差sigma（相同）
+%     k个高斯分布的均值c_mean(k*2维)
+%     图1   神经元数目变化的下降曲线
+%     图2   N次训练或者达到精度跳出时候的误差下降曲线
+%     控制台输出  第N次或者达到精度跳出循环的那次的训练误差
+%% 清空环境变量
+clc          %清除命令窗口的内容，对工作环境中的全部变量无任何影响 
+clear        %清除工作空间的所有变量 
+close all    %关闭所有的Figure窗口
+%% 需要设置的rbf网络参数
+% 设置训练样本数目 
+t = 800;
+N=100;%寻找最合适的神经元的训练次数
+r = 0.2;%学习率
+N_big=500;%训练次数
+e_permit = 0.01;%误差
+         %MBGD的批量样本选择数目(每次选择一小批样本数据训练)（通过选择步长可以选择梯度下降方式，选择b=800(一组样本)为SGD，b=1为BGD）
+         %批量梯度下降法BGD，随机梯度下降法SGD，小批量梯度下降法MBGD
+k_best=180;
+%% 产生输入 输出数据   产生x y
+x = rands(1,t);
+y = x;
+% 按照函数先求得相应的函数值，作为网络的输出。
+z= sin(2*pi*x).*sin(2*pi*y);
+%% 调用k-mean聚类函数，无监督学习出k个均值点，注意：此处可以进行改进不要再调用聚类函数，而是把上一次调用最佳神经元函数时的所需参数求出
+
+[ resX,resY,resZ,record,meanX,meanY,meanZ] = FunK_mean3D( x,y,z,k_best);  %调用K-means函数,K-means聚类算法采用的是将N*P的矩阵X划分为k_best个类，
+                                                                          %使得类内对象之间的距离最大,而类之间的距离最小。
+
+ %% 设置高斯函数的方差sigma，以及初始化训练所需要的参数
+    
+    c_mean=[meanX' meanY'];   %2D均值点.先取转置，成180*2矩阵。
+    d = pdist(c_mean,'euclidean');  %pdist(c_mean)为计算c-mean中每对行向量的相互距离.算均值点距离（欧几里得距离）squareform(c) 
+    cm = max(d);
+    sigma = cm/(sqrt(2*k_best)); %激活函数为高斯函数时  其方差sigma
+    w= rands(1,k_best);    %w
+    
+%% 训练隐藏层到输出层的权重w   
+    %训练数据
+    for tra = 1:N_big
+        E_p = zeros(1,t);  %预先分配内存可以提高程序速度，因为E_p（误差绝对值）是迭代生成的
+        for p=1:t 
+            eata1 = zeros(1,k_best);
+            J_0=zeros(1,t);
+            for l=50
+                for j = 1:k_best
+                    d1=(x(p)-meanX(j)).^2;%数据与中心点距离的平方（||x(t)-c(xk_best)||^2）
+                    d2 = (y(p)-meanY(j)).^2;%数据与中心点距离的平方（||y(t)-c(yk_best)||^2）
+                    R(j) = exp(-(d1+d2)/(2*sigma.^2));
+                end    
+                z_p= w*R';
+                error_p=z(p)-z_p;
+                E_p(p)= abs(error_p);%绝对值
+                R_0=R*R';
+                eata1=(error_p*R)/R_0;  
+                w=w+r*eata1; 
+                if E_p<e_permit
+                    break  
+                end 
+            end   
+        end  
+        J(tra)=sum(E_p,2);%b=sum(a,dim); a表示矩阵；dim等于1或者2，1表示每一列进行求和，2表示每一行进行求和
+    end
+%% 画出训练的误差曲线
+    %训练结束
+    disp(['选取隐藏层神经元最好的数目为：' num2str(k_best) ' 时，经过第 ' num2str(N_big) ...
+        ' 次更新 ' num2str(t) ' 个样本的总误差e(每个样本为绝对值误差)为：' num2str(J(tra)) '。']); 
+    figure;
+    hold on;
+    xlabel('训练次数tra','FontSize',15);ylabel('样本的绝对值误差和','FontSize',15);
+    title('绝对值误差训练曲线');
+    plot(J);  %%%整体的训练误差曲线
+%% 保存参数w  c_mean  sigma 
+save .\data\data_w.txt w -ascii;
+save .\data\data_c_mean.txt c_mean -ascii;
+save .\data\data_sigma.txt sigma -ascii
+save .\data\data_k_best.txt k_best -ascii;
+
+
+%% MBGD
+%   BGD批量梯度下降每次更新使用了所有的训练数据，最小化损失函数，如果只有一个极小值，那么批量梯度下降是考虑了训练集所有的数据，
+%   是朝着最小值迭代运动的，但是缺点是如果样本值很大的话，更新速度会很慢。 SGD随机梯度下降在每次更新的时候，只考虑一个样本点，
+%   这样会大大加快训练数据，也恰好是批量梯度下降的缺点，但是有可能由于训练数据的噪声点较多，那么每一次利用噪声点进行更新的过程中，
+%   就不一定是朝着极小值方向更新，但是由于更新多轮，整体方向还是朝着极小值方向更新，又提高了速度。 
+%   MBGD小批量梯度下降法是为了解决批量梯度下降的训练速度慢，以及随机梯度下降法的准确性综合而来，但是这里注意，
+%   不同问题的batch是不一样的，要通过实验结果来进行超参数的调整。
+
+
+
+%% Matlab神经网络RBF  k-means聚类程序
+% 说明：matlab 提供了k-means聚类函数 但本文重写了自己的函数
+% 功能：
+%     RBF网络的回归--三维空间k-mean聚类算法的实现
+% 输入：
+%     三维数据，分别用x,y,z三个一维向量代表三个维度
+%     k 是分成的类别的数量
+% 输出：
+%     k行的三个矩阵
+%     对应同样的第n行，存放着第n类的所有元素
+%     record: 记录着每一行的有效元素的个数
+%     k-means聚类算法更新均值点的次数为n次
+%%     k-means函数
+
+function [ resX,resY, resZ,record,meanX,meanY,meanZ] = FunK_mean3D( x,y,z,k)
+    t = 800;
+    k=180;
+    x = rands(1,t);  %rands为[-1,1]之间的随机数。rand为[0,1]之间的随机数
+    y = x;
+    z= sin(2*pi*x).*sin(2*pi*y);
+    %%
+    % 下面是预分配内存，因为迭代需要
+    % meanX ，meanY，meanZ中存放着所有均值的x,y,z坐标(1*k)
+    meanX = zeros(1,k);
+    meanY = zeros(1,k);
+    meanZ = zeros(1,k);
+    
+    %初始化聚类后得到的矩阵（k*t）,每行代表每一类的数目，其余为0
+    resX = zeros(k,length(x));  %180*800 的零矩阵
+    resY = zeros(k,length(x));
+    resZ = zeros(k,length(x));
+    % 用来记录resX中每一行有效元素的个数，也就是每一类有多少个数据，一共k行
+    record = zeros(1,k); 
+    %%
+    for i = 1:k % 产生k个随机均值, 注意： 随机均值是来自元素集合
+        a = ceil(rand(1)*length(resX)); %ceil朝正无穷方向取整。resX全部为0。rand(1)生成0到1之间的随机数。length(resX)=800
+        meanX(i) = x(a);
+        meanY(i) = y(a);
+        meanZ(i) = z(a);
+        uniqx=length(meanX(i))-length(unique(meanX(i)));%通过unique函数去除数组中相同的元素，然后与原数组比较长度，如果长度不为0，i减1
+        uniqy=length(meanY(i))-length(unique(meanY(i)));
+        uniqz=length(meanZ(i))-length(unique(meanZ(i)));
+        % 保证均值不重叠，一般不会发生（&&与运算。所有条件，同时为正确，才成立。）
+        if (i > 1 && uniqx==0 &&uniqy==0 && uniqz==0)
+            i = i -1; % 重新产生一个均值
+        end
+    end
+    %%
+    %更新均值点的次数为n
+    %while 循环来不停更新均值点，直到均值点不再变化
+     n=1;
+    while 1
+       
+        record(:) = 0; % 重置为零，因为需要重新更新k个均值点
+        resX(:) = 0;
+        resY(:) = 0;
+        resZ(:) = 0;
+        for i = 1:length(x) % 对所有元素遍历
+                % 下面是判断本次元素应该归为哪一类，这里我们是根据欧几里得距离进行类别判定
+                % k-mean算法认为元素应该归为距离最近的均值代表的类
+                %找到x(i)的聚类meanX(j)
+            distanceMin = 1;
+            for j = 2:k
+                %通过比较距离，更新本次数据点离哪个均值点最近记作distanceMin，比起求出所有距离比较得出位置节省空间。power(2,3)：2的3次幂=8
+                if (power(x(i)-meanX(distanceMin),2)+power(y(i)-meanY(distanceMin),2)+power(z(i)-meanZ(distanceMin),2))... 
+                    > (power(x(i)-meanX(j),2) + power(y(i)-meanY(j),2)+power(z(i)-meanZ(j),2))
+                    distanceMin = j;
+                end
+            end
+            % 将本次元素点进行类别归并，并且通过更新record值来存到相应类的位置
+            resX(distanceMin,record(distanceMin)+1) = x(i);
+            resY(distanceMin,record(distanceMin)+1) = y(i);
+            resZ(distanceMin,record(distanceMin)+1) = z(i);
+            record(distanceMin) = record(distanceMin) + 1;
+        end
+        oldMeanX = meanX;
+        oldMeanY = meanY;
+        oldMeanZ = meanZ;
+        % 移动均值至其类中心
+        %record;
+        for i = 1:k
+            if record(i) == 0    %判断record(i)中是否有数据，continue可以跳出循环不执行下面语句
+                continue;
+            end
+            %把每类数据求均值
+            meanX(i) = sum(resX(i,:))/record(i);
+            meanY(i) = sum(resY(i,:))/record(i);
+            meanZ(i) = sum(resZ(i,:))/record(i);
+        end
+
+        % 当均值点不在变化，判定分类完毕。
+        % if meanX == oldMeanX & meanY == oldMeanY & meanZ==oldMeanZ同时成立，判定均值点不在变化。
+        if (meanX == oldMeanX & meanY == oldMeanY & meanZ == oldMeanZ)
+            break;
+        end
+        %更新次数加1
+        n=n+1;
+        
+    end
+    %%
+    disp(['k-means聚类算法在均值点k等于:  ' num2str(k) '时更新均值点的次数为n： ' num2str(n)]);
+end
